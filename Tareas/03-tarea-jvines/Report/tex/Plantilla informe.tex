@@ -44,7 +44,7 @@ longend % Los end son para cada ciclo, por ejemplo endif para los if-else.
 % ---------------- Comando mas corto para insertar figuras. Ojo que deben estar guardadas en ./img/
 % \fig{name}{width}{height}{caption}
 \newcommand{\fig}[4]{%
-	\begin{figure}[!ht]
+	\begin{figure}[!htbp]
 		\centering
 		\includegraphics[width=#2, height=#3]{img/#1}
 		\caption{#4}
@@ -181,25 +181,93 @@ La interpolaci\'on de polinomios consiste en, dado un conjunto de puntos, encont
 
 \section{Procedimiento}
 \subsection{Comparaci\'on de M\'etodos}
-Para comparar como funcionan los m\'etodos, estos se aplicar\'an a una funci\'on Gaussiana definida como sigue:
+Para comparar como funcionan los m\'etodos, \'estos se aplicar\'an a una funci\'on Gaussiana definida como sigue:
 \begin{equation}
 	f(x) = e^{-x^{2}/0.05}
 \end{equation}
 
 En primera instancia se divide el intervalo $[-1,1]$ en 4 tramos equiespaciados con la funci\'on \textbf{linspace}, dejando un total de 5 puntos para llevar a cabo la interpolaci\'on, luego, haciendo uso del m\'odulo \textbf{scipy.interpolate} y de la funci\'on \textbf{lagrange} y clase \textbf{UnivariateSpline} se hace la interpolaci\'on, aumentando en 5 el n\'umero de puntos para la interpolaci\'on hasta llegar a 20, siempre manteniendo el equiespaciado del intervalo.
 
-La funci\'on \textbf{lagrange} recibe como argumentos dos vectores, $x$ e $y = f(x)$: un vector con el intervalo de puntos a samplear y uno con la funci\'on evaluada en dichos puntos respectivamente, y retorna un polinomio de Lagrange que pasa por todos los puntos de $x$. 
+La funci\'on \textbf{lagrange} recibe como argumentos dos vectores, $x$ e $y = f(x)$: un vector con el intervalo de puntos a samplear, uno con la funci\'on evaluada en dichos puntos respectivamente, y retorna un polinomio de Lagrange que pasa por todos los puntos de $x$. Como nota adicional, la implementaci\'on de Spline es num\'ericamente inestable y el resultado s\'olo es confiable hasta un intervalo con veinte puntos\footnote{http://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.lagrange.html\#scipy.interpolate.lagrange}.
 
-La clase \textbf{UnivariateSpline} recibe como argumentos dos vectores, $x$ e $y = f(x)$: un vector con el intervalo de puntos a samplear y uno con la funci\'on evaluada en dichos puntos respectivamente, y como par\'ametros adicionales recibe $s$, un factor de suavidad utilizado para elegir el n\'umero de nudos del Spline, y $k$, el orden del Spline. Se elige $s=0$ para que pase por todos los puntos del intervalo y $k=3$ para que sea un Spline c\'ubico. Esta clase instancia un objeto de tipo \textbf{UnivariateSpline} que representa un Spline que pasa por todos los puntos de $x$.
+La clase \textbf{UnivariateSpline} recibe como argumentos dos vectores, $x$ e $y = f(x)$: un vector con el intervalo de puntos a samplear y uno con la funci\'on evaluada en dichos puntos respectivamente, y como par\'ametros adicionales recibe $s$, un factor de suavidad utilizado para elegir el n\'umero de nudos del Spline, y $k$, el orden del Spline. Se elige $s=0$ para que pase por todos los puntos del intervalo y $k=3$ para que sea un Spline c\'ubico. Esta clase instancia un objeto de tipo \textbf{UnivariateSpline}, que representa un Spline que pasa por todos los puntos de $x$, que luego se puede evaluar.
 
 La clase \textbf{UnivariateSpline} es un wrapper de FITPACK, un paquete de subrutinas escrito en FORTRAN utilizado para calcular Splines suaves para distintos tipos de datos y geometr\'ias\footnote{http://www.netlib.org/dierckx/}; en particular \textbf{UnivariateSpline} hace uso de la subrutina \textbf{fpcurf0}, que a su vez utiliza la subrutina \textbf{fpcurf}\footnote{El archivo fpcurf.f est\'a incluido en la carpeta for\_routines en el repositorio.} para calcular el Spline.
 La condici\'on de suavidad que se debe cumplir en los nodos es que la k-\'esima derivada del Spline sea 0. La documentaci\'on de \textbf{fpcurf} no contiene informaci\'on de c\'omo maneja la implementaci\'on los extremos del intervalo, sin embargo la implementaci\'on cl\'asica del m\'etodo de Spline es imponer que la segunda derivada del Spline en los extremos sea 0, as\'i el Spline sigue una l\'inea recta desde los extremos.
 
 \subsection{Reparaci\'on de Imagen}
-Para reparar la imagen primero se toma una secci\'on de ella sobre la cual se interpolar\'a un Spline de dos dimensiones
+Primero, usando el m\'odulo \textbf{skimage}, \textbf{skimage.io} y la funci\'on \textbf{img\_as\_float}, se carga la imagen a reparar como un tensor de floats, compuesto por tres matrices que representan las capas R, G y B (red, green y blue) de la imagen. Luego de cargar la imagen se toma una estampilla de la imagen, es decir, se toma la secci\'on de esta que requiere reconstrucci\'on. Utilizando la funci\'on \textbf{scipy.where} se eligen los puntos de la estampilla no tiene errores para la interpolaci\'on, despu\'es de obtener los puntos en donde la estampilla no tiene pixeles muertos se hace una interpolaci\'on Spline en dos dimensiones para cada capa de la estampilla utilizando la clase \textbf{SmoothBivariateSpline}, luego se arreglan los puntos da\~nados por capa y se juntan todas para recrear la imagen original reconstruida.
+
+La clase \textbf{SmoothBivariateSpline} tambi\'en es un wrapper de FITPACK. Esta clase en particular utiliza la subrutina \textbf{surfit}. La clase recibe tres vectores de una dimensi\'on; $x, y, z$; que representan las coordenadas de los puntos para la interpolaci\'on (es necesario notar que el orden de estos argumentos no es importante para el funcionamiento del algoritmo), y un par\'ametro adicional $kx$ y $ky$, los \'ordenes del Spline para $x$ e $y$ respectivamente, \'estos se eligen como $kx = ky = 3$.
+
+A la clase \textbf{SmoothBivariateSpline} se le dio como argumentos los bordes de la estampilla y un vector con los valores de la estampilla en todos los pixeles no da\~nados.
 
 \section{Resultados}
+La figura 1 muestra la interpolaci\'on con polinomios de Lagrange. De la figura se aprecia que \'esta aproximaci\'on es m\'as fiel a la funci\'on original a medida se aumenta la cantidad de puntos utilizados para la interpolaci\'on, sin embargo a los extremos se observa un comportamiento oscilatorio de la aproximaci\'on, conocido como el Fen\'omeno de Runge\footnote{https://en.wikipedia.org/wiki/Runge\%27s\_phenomenon}.
+
+La figura 2 muestra la interpolaci\'on con Spline. A mayor cantidad de puntos la interpolaci\'on con Spline es mejor aproximaci\'on que la interpolaci\'on con Lagrange. La interpolaci\'on con Spline no presenta el Fen\'omeno de Runge cuando se usa una cantidad grande de puntos.
+
+La figura 3 muestra la diferencia entre ambos m\'etodos de interpolacion y la funci\'on original. Se puede apreciar de ella que la aproximaci\'on Spline es mejor que la aproximaci\'on con Lagrange.
+
+La figura 4 muestra la imagen de la galaxia reconstruida.
+\begin{figure}[!hbpt]
+\centering
+\begin{subfigure}{.5\textwidth}
+  \centering
+  \includegraphics[width=9cm, height=7cm]{img/lagrange5.pdf}
+  \caption{Interpolaci\'on con Lagrange para un intervalo\\ $[-1,1]$ equiespaciado con 5 puntos.}
+\end{subfigure}%
+\begin{subfigure}{.5\textwidth}
+  \centering
+  \includegraphics[width=9cm, height=7cm]{img/lagrange10.pdf}
+  \caption{Interpolaci\'on con Lagrange para un intervalo\\ $[-1,1]$ equiespaciado con 10 puntos.}
+\end{subfigure}
+\begin{subfigure}{.5\textwidth}
+  \centering
+  \includegraphics[width=9cm, height=7cm]{img/lagrange15.pdf}
+  \caption{Interpolaci\'on con Lagrange para un intervalo\\ $[-1,1]$ equiespaciado con 15 puntos.}
+\end{subfigure}%
+\begin{subfigure}{.5\textwidth}
+  \centering
+  \includegraphics[width=9cm, height=7cm]{img/lagrange20.pdf}
+  \caption{Interpolaci\'on con Lagrange para un intervalo\\ $[-1,1]$ equiespaciado con 20 puntos.}
+\end{subfigure}
+\caption{Distintas interpolaciones utilizando polinomios de Lagrange.}
+\end{figure}
+
+\begin{figure}[!hbpt]
+\centering
+\begin{subfigure}{.5\textwidth}
+  \centering
+  \includegraphics[width=9cm, height=7cm]{img/spline5.pdf}
+  \caption{Interpolaci\'on con Spline para un intervalo\\ $[-1,1]$ equiespaciado con 5 puntos.}
+\end{subfigure}%
+\begin{subfigure}{.5\textwidth}
+  \centering
+  \includegraphics[width=9cm, height=7cm]{img/spline10.pdf}
+  \caption{Interpolaci\'on con Spline para un intervalo\\ $[-1,1]$ equiespaciado con 10 puntos.}
+\end{subfigure}
+\begin{subfigure}{.5\textwidth}
+  \centering
+  \includegraphics[width=9cm, height=7cm]{img/spline15.pdf}
+  \caption{Interpolaci\'on con Spline para un intervalo\\ $[-1,1]$ equiespaciado con 15 puntos.}
+\end{subfigure}%
+\begin{subfigure}{.5\textwidth}
+  \centering
+  \includegraphics[width=9cm, height=7cm]{img/spline20.pdf}
+  \caption{Interpolaci\'on con Spline para un intervalo\\ $[-1,1]$ equiespaciado con 20 puntos.}
+\end{subfigure}
+\caption{Distintas interpolaciones utilizando Spline.}
+\end{figure}
+
+\fig{lagrange_spl_diff.pdf}{18cm}{13cm}{Diferencia entre la funci\'on original y las aproximaciones de Lagrnge y Spline para 50 puntos en el intervalo $[-1, 1]$.}
+\fig{fixed_galaxy.pdf}{18cm}{13cm}{Imagen arreglada de la galaxia.}
+
+\newpage
 
 \section{Conclusiones}
+Se concluye que una interpolaci\'on con Spline c\'ubico es una mejor aproximaci\'on a mayor cantidad de puntos que una interpolaci\'on con un polinomio de Lagrange, o si es de inter\'es analizar los extremos de la funci\'on a interpolar ya que, a diferencia de \'esta, Spline no presenta el Fen\'omeno de Runge.
+
+Se concluye que la interpolaci\'on es una herramienta \'util en el an\'alisis de im\'agenes, en particular si se busca reparar una imagen da\~nada.
 
 \end{document}
